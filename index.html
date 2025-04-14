@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Futuristic Drone Swarm Control</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      background: radial-gradient(circle, #0a0a23, #000);
+      color: #0ff;
+      font-family: 'Orbitron', sans-serif;
+      overflow: hidden;
+    }
+    canvas { display: block; }
+    #ui-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    .drone-card {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      background: rgba(0, 255, 255, 0.1);
+      border: 1px solid #0ff;
+      border-radius: 10px;
+      text-align: center;
+      pointer-events: auto;
+      transition: transform 0.3s;
+      cursor: pointer;
+    }
+    .drone-card:hover {
+      transform: scale(1.2) rotate(5deg);
+      background: rgba(0, 255, 255, 0.3);
+    }
+    #info-panel {
+      position: absolute;
+      width: 350px;
+      background: linear-gradient(135deg, rgba(0, 255, 255, 0.2), rgba(0, 0, 50, 0.7));
+      border: 2px solid #0ff;
+      border-radius: 15px;
+      padding: 20px;
+      pointer-events: auto;
+      display: none;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+      backdrop-filter: blur(10px);
+    }
+    #info-panel h3 {
+      text-align: center;
+      text-shadow: 0 0 10px #0ff;
+    }
+    #info-panel p {
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    #camera-feed {
+      width: 100%;
+      height: 150px;
+      border-radius: 10px;
+      border: 1px solid #0ff;
+    }
+    #close-panel {
+      background: #ff4444;
+      border: none;
+      padding: 10px;
+      width: 100%;
+      border-radius: 5px;
+      color: #fff;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #close-panel:hover {
+      background: #cc0000;
+    }
+    #control-hub {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      pointer-events: auto;
+    }
+    .control-btn {
+      background: rgba(0, 255, 255, 0.2);
+      border: 1px solid #0ff;
+      padding: 10px 20px;
+      border-radius: 20px;
+      color: #0ff;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .control-btn:hover {
+      background: rgba(0, 255, 255, 0.5);
+      box-shadow: 0 0 15px #0ff;
+    }
+    #map-container {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      width: 300px;
+      height: 200px;
+      border: 1px solid #0ff;
+      border-radius: 10px;
+      pointer-events: auto;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="ui-container">
+    <div id="info-panel">
+      <h3 id="drone-title">Drone Info</h3>
+      <p><strong>ID:</strong> <span id="drone-id"></span></p>
+      <p><strong>Status:</strong> <span id="drone-status"></span></p>
+      <p><strong>Battery:</strong> <span id="drone-battery"></span></p>
+      <p><strong>GPS:</strong> <span id="drone-gps"></span></p>
+      <p><strong>Speed:</strong> <span id="drone-speed"></span></p>
+      <p><strong>Camera Feed:</strong></p>
+      <img id="camera-feed" src="https://via.placeholder.com/320x150?text=Holographic+Feed" alt="Camera Feed">
+      <p><strong>Health:</strong> <span id="drone-health"></span></p>
+      <p><strong>Flight Mode:</strong> <span id="drone-mode"></span></p>
+      <p><strong>Last Command:</strong> <span id="drone-command"></span></p>
+      <p><strong>Signal:</strong> <span id="drone-signal"></span></p>
+      <p><strong>Distance:</strong> <span id="drone-distance"></span></p>
+      <button id="close-panel" onclick="closePanel()">Close</button>
+    </div>
+    <div id="control-hub">
+      <button class="control-btn" onclick="startSwarm()">Deploy Swarm</button>
+      <button class="control-btn" onclick="changeFormation('helix')">Helix Formation</button>
+      <button class="control-btn" onclick="changeFormation('wave')">Wave Formation</button>
+    </div>
+    <div id="map-container"></div>
+  </div>
+
+  <script>
+    // Dummy drone data
+    const drones = Array.from({ length: 25 }, (_, i) => ({
+      id: i + 1,
+      status: ['Active', 'Idle', 'Charging'][Math.floor(Math.random() * 3)],
+      battery: Math.floor(Math.random() * 100),
+      gps: `${(51.5 + Math.random() * 0.01).toFixed(4)},${(-0.09 + Math.random() * 0.01).toFixed(4)}`,
+      speed: (Math.random() * 20).toFixed(1) + ' m/s',
+      health: ['Optimal', 'Warning', 'Critical'][Math.floor(Math.random() * 3)],
+      mode: ['Manual', 'Auto', 'Swarm'][Math.floor(Math.random() * 3)],
+      command: ['Hover', 'Patrol', 'Return'][Math.floor(Math.random() * 3)],
+      signal: Math.floor(Math.random() * 100) + '%',
+      distance: (Math.random() * 500).toFixed(1) + ' m',
+      x: Math.random() * 100 - 50,
+      y: Math.random() * 100 - 50,
+      z: Math.random() * 50
+    }));
+
+    // Three.js Setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Drone Models (Torus for futuristic vibe)
+    const droneGeometry = new THREE.TorusGeometry(0.5, 0.2, 16, 100);
+    const droneMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+    const droneMeshes = drones.map((drone, i) => {
+      const mesh = new THREE.Mesh(droneGeometry, droneMaterial);
+      mesh.position.set(drone.x, drone.y, drone.z);
+      scene.add(mesh);
+      return mesh;
+    });
+
+    // Particle Effects
+    const particleGeometry = new THREE.BufferGeometry();
+    const particleCount = 1000;
+    const posArray = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i++) {
+      posArray[i] = (Math.random() - 0.5) * 200;
+    }
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.1,
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.6
+    });
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(particles);
+
+    camera.position.z = 100;
+
+    // Holographic Dashboard
+    const uiContainer = document.getElementById('ui-container');
+    drones.forEach((drone, i) => {
+      const card = document.createElement('div');
+      card.className = 'drone-card';
+      card.style.left = `${50 + (i % 5) * 120}px`;
+      card.style.top = `${50 + Math.floor(i / 5) * 120}px`;
+      card.innerHTML = `
+        <h5>Drone ${drone.id}</h5>
+        <p>${drone.status}</p>
+      `;
+      card.onclick = () => selectDrone(drone);
+      uiContainer.appendChild(card);
+      gsap.to(card, {
+        rotation: 360,
+        duration: 20,
+        repeat: -1,
+        ease: 'linear'
+      });
+    });
+
+    // Map
+    const map = L.map('map-container').setView([51.505, -0.09], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    drones.forEach(drone => {
+      const [lat, lon] = drone.gps.split(',');
+      L.marker([lat, lon]).addTo(map).bindPopup(`Drone ${drone.id}`);
+    });
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      droneMeshes.forEach(mesh => {
+        mesh.rotation.y += 0.02;
+      });
+      particles.rotation.y += 0.001;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Controls
+    function startSwarm() {
+      speak('Swarm deployed');
+      gsap.to(droneMeshes, {
+        duration: 2,
+        z: 10,
+        ease: 'power2.out'
+      });
+    }
+
+    function changeFormation(type) {
+      if (type === 'helix') {
+        droneMeshes.forEach((mesh, i) => {
+          const angle = (i / 25) * 4 * Math.PI;
+          const radius = 20;
+          gsap.to(mesh.position, {
+            x: radius * Math.cos(angle),
+            y: radius * Math.sin(angle),
+            z: i * 2,
+            duration: 2,
+            ease: 'power2.out'
+          });
+        });
+        speak('Helix formation activated');
+      } else if (type === 'wave') {
+        droneMeshes.forEach((mesh, i) => {
+          gsap.to(mesh.position, {
+            x: (i % 5) * 10 - 20,
+            y: Math.sin(i) * 10,
+            z: Math.floor(i / 5) * 10,
+            duration: 2,
+            ease: 'power2.out'
+          });
+        });
+        speak('Wave formation activated');
+      }
+    }
+
+    // Info Panel
+    function selectDrone(drone) {
+      const panel = document.getElementById('info-panel');
+      panel.style.display = 'block';
+      panel.style.top = `${window.innerHeight / 2 - 200}px`;
+      panel.style.left = `${window.innerWidth / 2 - 175}px`;
+      document.getElementById('drone-title').textContent = `Drone ${drone.id}`;
+      document.getElementById('drone-id').textContent = drone.id;
+      document.getElementById('drone-status').textContent = drone.status;
+      document.getElementById('drone-battery').textContent = `${drone.battery}%`;
+      document.getElementById('drone-gps').textContent = drone.gps;
+      document.getElementById('drone-speed').textContent = drone.speed;
+      document.getElementById('drone-health').textContent = drone.health;
+      document.getElementById('drone-mode').textContent = drone.mode;
+      document.getElementById('drone-command').textContent = drone.command;
+      document.getElementById('drone-signal').textContent = drone.signal;
+      document.getElementById('drone-distance').textContent = drone.distance;
+      gsap.fromTo(panel, 
+        { opacity: 0, scale: 0.8 }, 
+        { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out' }
+      );
+      speak(`Drone ${drone.id} selected`);
+    }
+
+    function closePanel() {
+      const panel = document.getElementById('info-panel');
+      gsap.to(panel, {
+        opacity: 0,
+        scale: 0.8,
+        duration: 0.3,
+        ease: 'power2.in',
+        onComplete: () => panel.style.display = 'none'
+      });
+    }
+
+    // Voice Feedback
+    function speak(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.pitch = 1.2;
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
