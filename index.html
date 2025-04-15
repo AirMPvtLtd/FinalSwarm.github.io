@@ -23,16 +23,33 @@
       left: 0;
       width: 100%;
       height: 100%;
+      display: flex;
       pointer-events: none;
     }
+    #left-column {
+      width: 20%;
+      padding: 20px;
+      overflow-y: auto;
+      pointer-events: auto;
+    }
+    #center-column {
+      width: 60%;
+      position: relative;
+    }
+    #right-column {
+      width: 20%;
+      padding: 20px;
+      overflow-y: auto;
+      pointer-events: auto;
+    }
     .drone-card {
-      position: absolute;
       width: 100px;
       height: 100px;
       background: rgba(0, 255, 255, 0.1);
       border: 1px solid #0ff;
       border-radius: 10px;
       text-align: center;
+      margin-bottom: 10px;
       pointer-events: auto;
       transition: transform 0.3s;
       cursor: pointer;
@@ -40,6 +57,62 @@
     .drone-card:hover {
       transform: scale(1.2) rotate(5deg);
       background: rgba(0, 255, 255, 0.3);
+    }
+    .camera-feed-container {
+      margin-bottom: 15px;
+    }
+    .camera-feed {
+      width: 100%;
+      height: 100px;
+      border-radius: 8px;
+      border: 1px solid #0ff;
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+    .camera-feed:hover {
+      transform: scale(1.1);
+    }
+    .location-btn {
+      background: rgba(0, 255, 255, 0.2);
+      border: 1px solid #0ff;
+      padding: 8px;
+      width: 100%;
+      border-radius: 5px;
+      color: #0ff;
+      cursor: pointer;
+      margin-top: 5px;
+      transition: all 0.3s;
+      font-size: 12px;
+    }
+    .location-btn:hover {
+      background: rgba(0, 255, 255, 0.5);
+      box-shadow: 0 0 10px #0ff;
+    }
+    .zoomed-feed {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80vw;
+      height: 80vh;
+      z-index: 1000;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      pointer-events: auto;
+    }
+    #location-map {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80vw;
+      height: 80vh;
+      z-index: 1000;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      pointer-events: auto;
+      background: rgba(0, 0, 50, 0.7);
+      display: none;
     }
     #info-panel {
       position: absolute;
@@ -52,6 +125,7 @@
       display: none;
       box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
       backdrop-filter: blur(10px);
+      z-index: 999;
     }
     #info-panel h3 {
       text-align: center;
@@ -61,7 +135,7 @@
       margin: 8px 0;
       font-size: 14px;
     }
-    #camera-feed {
+    #camera-feed-panel {
       width: 100%;
       height: 150px;
       border-radius: 10px;
@@ -102,16 +176,6 @@
       background: rgba(0, 255, 255, 0.5);
       box-shadow: 0 0 15px #0ff;
     }
-    #map-container {
-      position: absolute;
-      bottom: 20px;
-      right: 20px;
-      width: 300px;
-      height: 200px;
-      border: 1px solid #0ff;
-      border-radius: 10px;
-      pointer-events: auto;
-    }
     @keyframes pulse {
       0% { opacity: 0.6; }
       50% { opacity: 1; }
@@ -122,28 +186,32 @@
 </head>
 <body>
   <div id="ui-container">
-    <div id="info-panel">
-      <h3 id="drone-title">Drone Info</h3>
-      <p><strong>ID:</strong> <span id="drone-id"></span></p>
-      <p><strong>Status:</strong> <span id="drone-status"></span></p>
-      <p><strong>Battery:</strong> <span id="drone-battery"></span></p>
-      <p><strong>GPS:</strong> <span id="drone-gps"></span></p>
-      <p><strong>Speed:</strong> <span id="drone-speed"></span></p>
-      <p><strong>Camera Feed:</strong></p>
-      <img id="camera-feed" src="https://via.placeholder.com/320x150?text=Holographic+Feed" alt="Camera Feed">
-      <p><strong>Health:</strong> <span id="drone-health"></span></p>
-      <p><strong>Flight Mode:</strong> <span id="drone-mode"></span></p>
-      <p><strong>Last Command:</strong> <span id="drone-command"></span></p>
-      <p><strong>Signal:</strong> <span id="drone-signal"></span></p>
-      <p><strong>Distance:</strong> <span id="drone-distance"></span></p>
-      <button id="close-panel" onclick="closePanel()">Close</button>
+    <div id="left-column"></div>
+    <div id="center-column">
+      <div id="info-panel">
+        <h3 id="drone-title">Drone Info</h3>
+        <p><strong>ID:</strong> <span id="drone-id"></span></p>
+        <p><strong>Status:</strong> <span id="drone-status"></span></p>
+        <p><strong>Battery:</strong> <span id="drone-battery"></span></p>
+        <p><strong>GPS:</strong> <span id="drone-gps"></span></p>
+        <p><strong>Speed:</strong> <span id="drone-speed"></span></p>
+        <p><strong>Camera Feed:</strong></p>
+        <img id="camera-feed-panel" src="https://via.placeholder.com/320x150?text=Holographic+Feed" alt="Camera Feed">
+        <p><strong>Health:</strong> <span id="drone-health"></span></p>
+        <p><strong>Flight Mode:</strong> <span id="drone-mode"></span></p>
+        <p><strong>Last Command:</strong> <span id="drone-command"></span></p>
+        <p><strong>Signal:</strong> <span id="drone-signal"></span></p>
+        <p><strong>Distance:</strong> <span id="drone-distance"></span></p>
+        <button id="close-panel" onclick="closePanel()">Close</button>
+      </div>
+      <div id="control-hub">
+        <button class="control-btn" onclick="startSwarm()">Deploy Swarm</button>
+        <button class="control-btn" onclick="changeFormation('helix')">Helix Formation</button>
+        <button class="control-btn" onclick="changeFormation('wave')">Wave Formation</button>
+      </div>
     </div>
-    <div id="control-hub">
-      <button class="control-btn" onclick="startSwarm()">Deploy Swarm</button>
-      <button class="control-btn" onclick="changeFormation('helix')">Helix Formation</button>
-      <button class="control-btn" onclick="changeFormation('wave')">Wave Formation</button>
-    </div>
-    <div id="map-container"></div>
+    <div id="right-column"></div>
+    <div id="location-map"></div>
   </div>
 
   <script>
@@ -171,7 +239,7 @@
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // Drone Models (Torus for futuristic vibe)
+    // Drone Models
     const droneGeometry = new THREE.TorusGeometry(0.5, 0.2, 16, 100);
     const droneMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
     const droneMeshes = drones.map((drone, i) => {
@@ -200,19 +268,17 @@
 
     camera.position.z = 100;
 
-    // Holographic Dashboard
-    const uiContainer = document.getElementById('ui-container');
+    // Left Column: Drone Cards
+    const leftColumn = document.getElementById('left-column');
     drones.forEach((drone, i) => {
       const card = document.createElement('div');
       card.className = 'drone-card';
-      card.style.left = `${50 + (i % 5) * 120}px`;
-      card.style.top = `${50 + Math.floor(i / 5) * 120}px`;
       card.innerHTML = `
         <h5>Drone ${drone.id}</h5>
         <p>${drone.status}</p>
       `;
       card.onclick = () => selectDrone(drone);
-      uiContainer.appendChild(card);
+      leftColumn.appendChild(card);
       gsap.to(card, {
         rotation: 360,
         duration: 20,
@@ -221,13 +287,96 @@
       });
     });
 
-    // Map
-    const map = L.map('map-container').setView([51.505, -0.09], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-    drones.forEach(drone => {
-      const [lat, lon] = drone.gps.split(',');
-      L.marker([lat, lon]).addTo(map).bindPopup(`Drone ${drone.id}`);
+    // Right Column: Camera Feeds and Location Buttons
+    const rightColumn = document.getElementById('right-column');
+    drones.forEach((drone) => {
+      const feedContainer = document.createElement('div');
+      feedContainer.className = 'camera-feed-container';
+      feedContainer.innerHTML = `
+        <h5>Drone ${drone.id} Feed</h5>
+        <img class="camera-feed" src="https://via.placeholder.com/200x100?text=Drone+${drone.id}+Feed" alt="Drone ${drone.id} Feed">
+        <button class="location-btn" onclick="showLocation(${drone.id})">View Location</button>
+      `;
+      const img = feedContainer.querySelector('.camera-feed');
+      img.onclick = () => toggleZoomFeed(img, drone.id);
+      rightColumn.appendChild(feedContainer);
     });
+
+    // Zoom Feed Functionality
+    let zoomedFeed = null;
+    function toggleZoomFeed(img, droneId) {
+      if (zoomedFeed) {
+        zoomedFeed.remove();
+        zoomedFeed = null;
+      } else {
+        zoomedFeed = document.createElement('img');
+        zoomedFeed.className = 'zoomed-feed';
+        zoomedFeed.src = `https://via.placeholder.com/800x600?text=Drone+${droneId}+Zoomed+Feed`;
+        zoomedFeed.alt = `Drone ${droneId} Zoomed Feed`;
+        zoomedFeed.onclick = () => toggleZoomFeed(zoomedFeed, droneId);
+        document.body.appendChild(zoomedFeed);
+        gsap.from(zoomedFeed, {
+          scale: 0.5,
+          opacity: 0,
+          duration: 0.5,
+          ease: 'power2.out'
+        });
+      }
+    }
+
+    // Location Map Functionality
+    let locationMap = null;
+    let currentMarker = null;
+    function showLocation(droneId) {
+      const drone = drones.find(d => d.id === droneId);
+      if (!drone) return;
+
+      const mapContainer = document.getElementById('location-map');
+      mapContainer.style.display = 'block';
+
+      if (!locationMap) {
+        locationMap = L.map('location-map').setView([51.505, -0.09], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(locationMap);
+      }
+
+      if (currentMarker) {
+        locationMap.removeLayer(currentMarker);
+      }
+
+      const [lat, lon] = drone.gps.split(',');
+      locationMap.setView([lat, lon], 15);
+      currentMarker = L.marker([lat, lon]).addTo(locationMap).bindPopup(`Drone ${drone.id} Location`).openPopup();
+
+      gsap.from(mapContainer, {
+        scale: 0.5,
+        opacity: 0,
+        duration: 0.5,
+        ease: 'power2.out'
+      });
+
+      mapContainer.onclick = () => {
+        gsap.to(mapContainer, {
+          scale: 0.5,
+          opacity: 0,
+          duration: 0.3,
+          ease: 'power2.in',
+          onComplete: () => {
+            mapContainer.style.display = 'none';
+          }
+        });
+      };
+
+      // Simulate live location updates (for demo)
+      setInterval(() => {
+        const newLat = (parseFloat(lat) + (Math.random() - 0.5) * 0.001).toFixed(4);
+        const newLon = (parseFloat(lon) + (Math.random() - 0.5) * 0.001).toFixed(4);
+        drone.gps = `${newLat},${newLon}`;
+        if (currentMarker && mapContainer.style.display === 'block') {
+          currentMarker.setLatLng([newLat, newLon]);
+          locationMap.panTo([newLat, newLon]);
+        }
+      }, 5000);
+    }
 
     // Animation Loop
     function animate() {
@@ -295,6 +444,7 @@
       document.getElementById('drone-command').textContent = drone.command;
       document.getElementById('drone-signal').textContent = drone.signal;
       document.getElementById('drone-distance').textContent = drone.distance;
+      document.getElementById('camera-feed-panel').src = `https://via.placeholder.com/320x150?text=Drone+${drone.id}+Feed`;
       gsap.fromTo(panel, 
         { opacity: 0, scale: 0.8 }, 
         { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out' }
