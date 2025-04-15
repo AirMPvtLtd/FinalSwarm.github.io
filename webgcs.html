@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AirM Swarm Terminal</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    body {
+      margin: 0;
+      background: radial-gradient(circle, #0a0a23, #000);
+      color: #0ff;
+      font-family: 'Orbitron', sans-serif;
+      overflow: hidden;
+    }
+    canvas { display: block; }
+    #ui-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      pointer-events: none;
+    }
+    #left-column {
+      width: 20%;
+      padding: 20px;
+      overflow-y: auto;
+      pointer-events: auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+    }
+    #center-column {
+      width: 60%;
+      position: relative;
+    }
+    #right-column {
+      width: 20%;
+      padding: 20px;
+      overflow-y: auto;
+      pointer-events: auto;
+    }
+    .drone-card {
+      width: 100px;
+      height: 100px;
+      background: rgba(0, 255, 255, 0.1);
+      border: 1px solid #0ff;
+      border-radius: 10px;
+      text-align: center;
+      margin-bottom: 10px;
+      pointer-events: auto;
+      transition: transform 0.3s;
+      cursor: pointer;
+    }
+    .drone-card:hover {
+      transform: scale(1.2) rotate(5deg);
+      background: rgba(0, 255, 255, 0.3);
+    }
+    .camera-feed-container {
+      margin-bottom: 15px;
+    }
+    .camera-feed {
+      width: 100%;
+      height: 100px;
+      border-radius: 8px;
+      border: 1px solid #0ff;
+      cursor: pointer;
+      transition: transform 0.3s;
+    }
+    .camera-feed:hover {
+      transform: scale(1.1);
+    }
+    .location-btn {
+      background: rgba(0, 255, 255, 0.2);
+      border: 1px solid #0ff;
+      padding: 8px;
+      width: 100%;
+      border-radius: 5px;
+      color: #0ff;
+      cursor: pointer;
+      margin-top: 5px;
+      transition: all 0.3s;
+      font-size: 12px;
+    }
+    .location-btn:hover {
+      background: rgba(0, 255, 255, 0.5);
+      box-shadow: 0 0 10px #0ff;
+    }
+    .zoomed-feed {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80vw;
+      height: 80vh;
+      z-index: 1000;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      pointer-events: auto;
+    }
+    #location-map {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 80vw;
+      height: 80vh;
+      z-index: 1000;
+      border: 2px solid #0ff;
+      border-radius: 10px;
+      pointer-events: auto;
+      background: rgba(0, 0, 50, 0.7);
+      display: none;
+      flex-direction: column;
+    }
+    #map-content {
+      flex: 1;
+    }
+    #close-map {
+      background: #ff4444;
+      border: none;
+      padding: 10px;
+      width: 100%;
+      border-radius: 0 0 10px 10px;
+      color: #fff;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #close-map:hover {
+      background: #cc0000;
+    }
+    #info-panel {
+      position: absolute;
+      width: 350px;
+      background: linear-gradient(135deg, rgba(0, 255, 255, 0.2), rgba(0, 0, 50, 0.7));
+      border: 2px solid #0ff;
+      border-radius: 15px;
+      padding: 20px;
+      pointer-events: auto;
+      display: none;
+      box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+      backdrop-filter: blur(10px);
+      z-index: 999;
+    }
+    #info-panel h3 {
+      text-align: center;
+      text-shadow: 0 0 10px #0ff;
+    }
+    #info-panel p {
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    #camera-feed-panel {
+      width: 100%;
+      height: 150px;
+      border-radius: 10px;
+      border: 1px solid #0ff;
+    }
+    #close-panel {
+      background: #ff4444;
+      border: none;
+      padding: 10px;
+      width: 100%;
+      border-radius: 5px;
+      color: #fff;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #close-panel:hover {
+      background: #cc0000;
+    }
+    #control-hub {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      pointer-events: auto;
+      justify-content: center;
+    }
+    .control-btn {
+      background: rgba(0, 255, 255, 0.2);
+      border: 1px solid #0ff;
+      padding: 10px 20px;
+      border-radius: 20px;
+      color: #0ff;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+    .control-btn:hover {
+      background: rgba(0, 255, 255, 0.5);
+      box-shadow: 0 0 15px #0ff;
+    }
+    #header {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      text-shadow: 0 0 10px #0ff;
+      pointer-events: none;
+    }
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="ui-container">
+    <div id="header">AirM Swarm Terminal</div>
+    <div id="left-column"></div>
+    <div id="center-column">
+      <div id="info-panel">
+        <h3 id="drone-title">AirM Swarm Terminal - Drone Info</h3>
+        <p><strong>ID:</strong> <span id="drone-id"></span></p>
+        <p><strong>Status:</strong> <span id="drone-status"></span></p>
+        <p><strong>Battery:</strong> <span id="drone-battery"></span></p>
+        <p><strong>GPS:</strong> <span id="drone-gps"></span></p>
+        <p><strong>Speed:</strong> <span id="drone-speed"></span></p>
+        <p><strong>Camera Feed:</strong></p>
+        <img id="camera-feed-panel" alt="Camera Feed">
+        <p><strong>Health:</strong> <span id="drone-health"></span></p>
+        <p><strong>Flight Mode:</strong> <span id="drone-mode"></span></p>
+        <p><strong>Last Command:</strong> <span id="drone-command"></span></p>
+        <p><strong>Signal:</strong> <span id="drone-signal"></span></p>
+        <p><strong>Distance:</strong> <span id="drone-distance"></span></p>
+        <button id="close-panel" onclick="closePanel()">Close</button>
+      </div>
+      <div id="control-hub">
+        <button class="control-btn" onclick="startSwarm()">Deploy Swarm</button>
+        <button class="control-btn" onclick="takeOff()">Take Off</button>
+        <button class="control-btn" onclick="land()">Land</button>
+        <button class="control-btn" onclick="changeFormation('helix')">Helix Formation</button>
+        <button class="control-btn" onclick="changeFormation('wave')">Wave Formation</button>
+        <button class="control-btn" onclick="changeFormation('grid')">Grid Formation</button>
+        <button class="control-btn" onclick="changeFormation('circle')">Circle Formation</button>
+        <button class="control-btn" onclick="changeFormation('spiral')">Spiral Formation</button>
+        <button class="control-btn" onclick="changeFormation('line')">Line Formation</button>
+        <button class="control-btn" onclick="changeFormation('cube')">Cube Formation</button>
+      </div>
+    </div>
+    <div id="right-column"></div>
+    <div id="location-map">
+      <div id="map-content"></div>
+      <button id="close-map" onclick="closeMap()">Close Map</button>
+    </div>
+  </div>
+
+  <script>
+    // Drone data (10 drones: M1, M2, S1–S8)
+    const drones = [
+      { id: 1, zigbeeId: 0x01, name: 'M1', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: -20, y: -20, z: 0 },
+      { id: 2, zigbeeId: 0x02, name: 'M2', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: 20, y: 20, z: 0 },
+      { id: 3, zigbeeId: 0x11, name: 'S1', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: -10, y: -10, z: 0 },
+      { id: 4, zigbeeId: 0x12, name: 'S2', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: -5, y: -5, z: 0 },
+      { id: 5, zigbeeId: 0x13, name: 'S3', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: 0, y: 0, z: 0 },
+      { id: 6, zigbeeId: 0x14, name: 'S4', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: 5, y: 5, z: 0 },
+      { id: 7, zigbeeId: 0x15, name: 'S5', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: 10, y: 10, z: 0 },
+      { id: 8, zigbeeId: 0x16, name: 'S6', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: 15, y: 15, z: 0 },
+      { id: 9, zigbeeId: 0x17, name: 'S7', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: 20, y: 20, z: 0 },
+      { id: 10, zigbeeId: 0x18, name: 'S8', status: 'Idle', battery: 100, gps: '51.5050,-0.0900', speed: '0.0 m/s', health: 'Optimal', mode: 'Manual', command: 'None', signal: '100%', distance: '0.0 m', x: 25, y: 25, z: 0 }
+    ];
+
+    // Three.js Setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Drone Models
+    const droneGeometry = new THREE.TorusGeometry(0.5, 0.2, 16, 100);
+    const droneMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true });
+    const droneMeshes = drones.map((drone) => {
+      const mesh = new THREE.Mesh(droneGeometry, droneMaterial);
+      mesh.position.set(drone.x, drone.y, drone.z);
+      scene.add(mesh);
+      return mesh;
+    });
+
+    // Particle Effects
+    const particleGeometry = new THREE.BufferGeometry();
+    const particleCount = 1000;
+    const posArray = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i++) {
+      posArray[i] = (Math.random() - 0.5) * 200;
+    }
+    particleGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+    const particleMaterial = new THREE.PointsMaterial({
+      size: 0.1,
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.6
+    });
+    const particles = new THREE.Points(particleGeometry, particleMaterial);
+    scene.add(particles);
+
+    camera.position.z = 100;
+
+    // Zigbee Communication (WebSerial)
+    let serialPort = null;
+    let reader = null;
+    let zigbeeBuffer = [];
+
+    async function connectZigbee() {
+      try {
+        serialPort = await navigator.serial.requestPort();
+        await serialPort.open({ baudRate: 115200 });
+        reader = serialPort.readable.getReader();
+        readZigbee();
+        speak('AirM Swarm Terminal connected to Zigbee');
+      } catch (e) {
+        console.error('Zigbee connect failed:', e);
+        speak('AirM Swarm Terminal Zigbee connection failed');
+      }
+    }
+
+    async function readZigbee() {
+      while (true) {
+        try {
+          const { value, done } = await reader.read();
+          if (done) break;
+          zigbeeBuffer.push(...value);
+          processZigbeeData();
+        } catch (e) {
+          console.error('Zigbee read error:', e);
+          break;
+        }
+      }
+    }
+
+    function processZigbeeData() {
+      while (zigbeeBuffer.length >= 30) {
+        if (zigbeeBuffer[0] === 0xEE) { // Aggregated sensor data (~100 bytes)
+          if (zigbeeBuffer.length >= 100) {
+            const data = zigbeeBuffer.slice(0, 100);
+            const crc = computeCRC(data.slice(0, 99));
+            if (data[99] === (crc & 0xFF)) {
+              let offset = 3;
+              for (let i = 0; i < 5; i++) { // M1 + S1–S4 or M2 + S5–S8
+                const droneId = data[offset];
+                const drone = drones.find(d => d.zigbeeId === droneId);
+                if (drone) {
+                  drone.distance = readFloat(data, offset + 1).toFixed(1) + ' m';
+                  drone.roll = readFloat(data, offset + 5).toFixed(1);
+                  drone.pitch = readFloat(data, offset + 9).toFixed(1);
+                  drone.yaw = readFloat(data, offset + 13).toFixed(1);
+                  drone.gps = `${(51.505 + (droneId * 0.001)).toFixed(4)},${(-0.09 + (droneId * 0.001)).toFixed(4)}`;
+                  drone.altitude = readFloat(data, offset + 21).toFixed(1) + ' m';
+                  drone.battery = ((readFloat(data, offset + 25) / 4.35) * 100).toFixed(0) + '%';
+                  drone.signal = Math.min(100, 100 - (droneId * 2)).toString() + '%';
+                  updateDroneCard(drone);
+                }
+                offset += 29;
+              }
+            }
+            zigbeeBuffer = zigbeeBuffer.slice(100);
+          } else break;
+        } else if (zigbeeBuffer[0] === 0xDD) { // Video frame (~10 KB)
+          const frameSize = readUint32(zigbeeBuffer, 3);
+          if (frameSize <= 10000 && zigbeeBuffer.length >= frameSize + 8) {
+            const data = zigbeeBuffer.slice(0, frameSize + 8);
+            const crc = computeCRC(data.slice(0, frameSize + 7));
+            if (data[frameSize + 7] === (crc & 0xFF)) {
+              const droneId = data[1];
+              const drone = drones.find(d => d.zigbeeId === droneId);
+              if (drone) {
+                const frame = data.slice(7, frameSize + 7);
+                const blob = new Blob([frame], { type: 'image/jpeg' });
+                const url = URL.createObjectURL(blob);
+                document.querySelector(`#feed-${drone.id}`).src = url;
+                if (zoomedFeed && zoomedFeed.dataset.droneId == drone.id) {
+                  zoomedFeed.src = url;
+                }
+                document.getElementById('camera-feed-panel').src = url;
+              }
+            }
+            zigbeeBuffer = zigbeeBuffer.slice(frameSize + 8);
+          } else break;
+        } else {
+          zigbeeBuffer.shift();
+        }
+      }
+    }
+
+    async function sendZigbeeCommand(action, droneId, x = 0, y = 0, z = 0, speed = 0, yaw = 0) {
+      if (!serialPort) {
+        speak('AirM Swarm Terminal not connected to Zigbee');
+        return;
+      }
+      const buffer = new Uint8Array(30);
+      buffer[0] = 0xBB; // Command start
+      buffer[1] = droneId; // Target (M1: 0x01, S1: 0x11, etc.)
+      buffer[2] = 0x00; // GCS
+      buffer[3] = action; // 0: takeoff, 1: land, 2: waypoint, 3: hover, 4: video_on, 5: video_off
+      writeFloat(buffer, 4, x);
+      writeFloat(buffer, 8, y);
+      writeFloat(buffer, 12, z);
+      writeFloat(buffer, 16, speed);
+      writeFloat(buffer, 20, yaw);
+      buffer[24] = droneId;
+      const crc = computeCRC(buffer.slice(0, 29));
+      buffer[29] = crc & 0xFF;
+      const writer = serialPort.writable.getWriter();
+      await writer.write(buffer);
+      writer.releaseLock();
+    }
+
+    function readFloat(buffer, offset) {
+      return new DataView(new Uint8Array(buffer.slice(offset, offset + 4)).buffer).getFloat32(0, true);
+    }
+
+    function writeFloat(buffer, offset, value) {
+      new DataView(buffer.buffer).setFloat32(offset, value, true);
+    }
+
+    function readUint32(buffer, offset) {
+      return new DataView(new Uint8Array(buffer.slice(offset, offset + 4)).buffer).getUint32(0, true);
+    }
+
+    function computeCRC(data) {
+      let crc = 0xFFFF;
+      for (let i = 0; i < data.length; i++) {
+        crc ^= data[i];
+        for (let j = 0; j < 8; j++) {
+          if (crc & 0x0001) {
+            crc = (crc >> 1) ^ 0xA001;
+          } else {
+            crc >>= 1;
+          }
+        }
+      }
+      return crc;
+    }
+
+    // Left Column: Drone Cards
+    const leftColumn = document.getElementById('left-column');
+    drones.forEach((drone) => {
+      const card = document.createElement('div');
+      card.className = 'drone-card';
+      card.innerHTML = `
+        <h5>${drone.name}</h5>
+        <p>${drone.status}</p>
+      `;
+      card.onclick = () => selectDrone(drone);
+      leftColumn.appendChild(card);
+      gsap.to(card, {
+        rotation: 360,
+        duration: 20,
+        repeat: -1,
+        ease: 'linear'
+      });
+    });
+
+    // Right Column: Camera Feeds and Location Buttons
+    const rightColumn = document.getElementById('right-column');
+    drones.forEach((drone) => {
+      const feedContainer = document.createElement('div');
+      feedContainer.className = 'camera-feed-container';
+      feedContainer.innerHTML = `
+        <h5>${drone.name} Feed</h5>
+        <img class="camera-feed" id="feed-${drone.id}" src="https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80" alt="${drone.name} Feed">
+        <button class="location-btn" onclick="showLocation(${drone.id})">View Location</button>
+      `;
+      const img = feedContainer.querySelector('.camera-feed');
+      img.onclick = () => toggleZoomFeed(img, drone.id, drone.zigbeeId);
+      rightColumn.appendChild(feedContainer);
+    });
+
+    // Zoom Feed Functionality
+    let zoomedFeed = null;
+    async function toggleZoomFeed(img, droneId, zigbeeId) {
+      if (zoomedFeed) {
+        await sendZigbeeCommand(5, zigbeeId); // Video OFF
+        zoomedFeed.remove();
+        zoomedFeed = null;
+      } else {
+        await sendZigbeeCommand(4, zigbeeId); // Video ON
+        zoomedFeed = document.createElement('img');
+        zoomedFeed.className = 'zoomed-feed';
+        zoomedFeed.src = img.src;
+        zoomedFeed.dataset.droneId = droneId;
+        zoomedFeed.alt = `AirM Swarm Terminal - ${drones.find(d => d.id == droneId).name} Zoomed Feed`;
+        zoomedFeed.onclick = () => toggleZoomFeed(zoomedFeed, droneId, zigbeeId);
+        document.body.appendChild(zoomedFeed);
+        gsap.from(zoomedFeed, {
+          scale: 0.5,
+          opacity: 0,
+          duration: 0.5,
+          ease: 'power2.out'
+        });
+      }
+    }
+
+    // Location Map Functionality
+    let locationMap = null;
+    let currentMarker = null;
+    let updateInterval = null;
+    function showLocation(droneId) {
+      const drone = drones.find(d => d.id === droneId);
+      if (!drone) return;
+
+      const mapContainer = document.getElementById('location-map');
+      const mapContent = document.getElementById('map-content');
+      resetMap();
+
+      const mapDiv = document.createElement('div');
+      mapDiv.id = `map-${droneId}-${Date.now()}`;
+      mapDiv.style.width = '100%';
+      mapDiv.style.height = '100%';
+      mapContent.appendChild(mapDiv);
+
+      mapContainer.style.display = 'flex';
+
+      try {
+        locationMap = L.map(mapDiv.id, {
+          zoomControl: true,
+          attributionControl: true
+        }).setView([51.505, -0.09], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors'
+        }).addTo(locationMap);
+
+        const [lat, lon] = drone.gps.split(',');
+        locationMap.setView([parseFloat(lat), parseFloat(lon)], 15);
+        currentMarker = L.marker([parseFloat(lat), parseFloat(lon)])
+          .addTo(locationMap)
+          .bindPopup(`AirM Swarm Terminal - ${drone.name} Location`)
+          .openPopup();
+
+        setTimeout(() => {
+          if (locationMap) locationMap.invalidateSize();
+        }, 100);
+      } catch (error) {
+        console.error('Map init failed:', error);
+      }
+
+      gsap.from(mapContainer, {
+        scale: 0.5,
+        opacity: 0,
+        duration: 0.5,
+        ease: 'power2.out'
+      });
+
+      updateInterval = setInterval(() => {
+        const [lat, lon] = drone.gps.split(',');
+        if (currentMarker && mapContainer.style.display === 'flex' && locationMap) {
+          currentMarker.setLatLng([parseFloat(lat), parseFloat(lon)]);
+          locationMap.panTo([parseFloat(lat), parseFloat(lon)]);
+        }
+      }, 5000);
+    }
+
+    function closeMap() {
+      const mapContainer = document.getElementById('location-map');
+      gsap.to(mapContainer, {
+        scale: 0.5,
+        opacity: 0,
+        duration: 0.3,
+        ease: 'power2.in',
+        onComplete: () => {
+          mapContainer.style.display = 'none';
+          resetMap();
+        }
+      });
+    }
+
+    function resetMap() {
+      if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+      }
+      if (currentMarker) {
+        currentMarker = null;
+      }
+      if (locationMap) {
+        try {
+          locationMap.off();
+          locationMap.remove();
+        } catch (error) {
+          console.error('Error removing map:', error);
+        }
+        locationMap = null;
+      }
+      const mapContent = document.getElementById('map-content');
+      if (mapContent) mapContent.innerHTML = '';
+    }
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+      droneMeshes.forEach((mesh, i) => {
+        mesh.rotation.y += 0.02;
+        mesh.position.set(drones[i].x, drones[i].y, drones[i].z);
+      });
+      particles.rotation.y += 0.001;
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // Controls
+    async function startSwarm() {
+      await connectZigbee();
+      drones.forEach(async (drone) => {
+        await sendZigbeeCommand(3, drone.zigbeeId); // Hover
+        drone.status = 'Active';
+        drone.command = 'Deploy';
+        updateDroneCard(drone);
+      });
+      speak('AirM Swarm Terminal: Swarm deployed');
+    }
+
+    async function takeOff() {
+      drones.forEach(async (drone) => {
+        await sendZigbeeCommand(0, drone.zigbeeId, 0, 0, 2); // Takeoff to 2m
+        drone.status = 'Active';
+        drone.command = 'Take Off';
+        drone.z = 2;
+        gsap.to(droneMeshes[drone.id - 1].position, {
+          z: 2,
+          duration: 2,
+          ease: 'power2.out',
+          onComplete: () => updateDroneCard(drone)
+        });
+      });
+      speak('AirM Swarm Terminal: Swarm taking off');
+    }
+
+    async function land() {
+      drones.forEach(async (drone) => {
+        await sendZigbeeCommand(1, drone.zigbeeId); // Land
+        drone.status = 'Idle';
+        drone.command = 'Land';
+        drone.z = 0;
+        gsap.to(droneMeshes[drone.id - 1].position, {
+          z: 0,
+          duration: 2,
+          ease: 'power2.in',
+          onComplete: () => updateDroneCard(drone)
+        });
+      });
+      speak('AirM Swarm Terminal: Swarm landing');
+    }
+
+    function updateDroneCard(drone) {
+      const card = leftColumn.querySelector(`.drone-card:nth-child(${drone.id})`);
+      if (card) {
+        card.innerHTML = `
+          <h5>${drone.name}</h5>
+          <p>${drone.status}</p>
+        `;
+      }
+    }
+
+    async function changeFormation(type) {
+      const positions = [];
+      if (type === 'helix') {
+        drones.forEach((drone, i) => {
+          const angle = (i / 10) * 4 * Math.PI;
+          const radius = 10;
+          positions.push({ x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: i * 1 });
+        });
+        speak('AirM Swarm Terminal: Helix formation activated');
+      } else if (type === 'wave') {
+        drones.forEach((drone, i) => {
+          positions.push({ x: (i % 5) * 5 - 10, y: Math.sin(i) * 5, z: Math.floor(i / 5) * 5 + 2 });
+        });
+        speak('AirM Swarm Terminal: Wave formation activated');
+      } else if (type === 'grid') {
+        drones.forEach((drone, i) => {
+          const row = Math.floor(i / 5);
+          const col = i % 5;
+          positions.push({ x: (col - 2) * 5, y: (row - 1) * 5, z: 2 });
+        });
+        speak('AirM Swarm Terminal: Grid formation activated');
+      } else if (type === 'circle') {
+        drones.forEach((drone, i) => {
+          const angle = (i / 10) * 2 * Math.PI;
+          const radius = 10;
+          positions.push({ x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: 2 });
+        });
+        speak('AirM Swarm Terminal: Circle formation activated');
+      } else if (type === 'spiral') {
+        drones.forEach((drone, i) => {
+          const angle = (i / 10) * 6 * Math.PI;
+          const radius = 5 + i * 0.5;
+          positions.push({ x: radius * Math.cos(angle), y: radius * Math.sin(angle), z: i * 0.5 + 2 });
+        });
+        speak('AirM Swarm Terminal: Spiral formation activated');
+      } else if (type === 'line') {
+        drones.forEach((drone, i) => {
+          positions.push({ x: (i - 5) * 2, y: 0, z: 2 });
+        });
+        speak('AirM Swarm Terminal: Line formation activated');
+      } else if (type === 'cube') {
+        drones.forEach((drone, i) => {
+          const x = (i % 2) - 0.5;
+          const y = Math.floor((i % 4) / 2) - 0.5;
+          const z = Math.floor(i / 4) - 0.5 + 2;
+          positions.push({ x: x * 5, y: y * 5, z: z * 5 });
+        });
+        speak('AirM Swarm Terminal: Cube formation activated');
+      }
+
+      drones.forEach(async (drone, i) => {
+        await sendZigbeeCommand(2, drone.zigbeeId, positions[i].x, positions[i].y, positions[i].z, 0.5);
+        drone.x = positions[i].x;
+        drone.y = positions[i].y;
+        drone.z = positions[i].z;
+        gsap.to(droneMeshes[i].position, {
+          x: positions[i].x,
+          y: positions[i].y,
+          z: positions[i].z,
+          duration: 2,
+          ease: 'power2.out'
+        });
+      });
+    }
+
+    // Info Panel
+    function selectDrone(drone) {
+      const panel = document.getElementById('info-panel');
+      panel.style.display = 'block';
+      panel.style.top = `${window.innerHeight / 2 - 200}px`;
+      panel.style.left = `${window.innerWidth / 2 - 175}px`;
+      document.getElementById('drone-title').textContent = `AirM Swarm Terminal - ${drone.name}`;
+      document.getElementById('drone-id').textContent = drone.id;
+      document.getElementById('drone-status').textContent = drone.status;
+      document.getElementById('drone-battery').textContent = drone.battery;
+      document.getElementById('drone-gps').textContent = drone.gps;
+      document.getElementById('drone-speed').textContent = drone.speed;
+      document.getElementById('drone-health').textContent = drone.health;
+      document.getElementById('drone-mode').textContent = drone.mode;
+      document.getElementById('drone-command').textContent = drone.command;
+      document.getElementById('drone-signal').textContent = drone.signal;
+      document.getElementById('drone-distance').textContent = drone.distance;
+      document.getElementById('camera-feed-panel').src = document.querySelector(`#feed-${drone.id}`).src;
+      gsap.fromTo(panel, 
+        { opacity: 0, scale: 0.8 }, 
+        { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out' }
+      );
+      speak(`AirM Swarm Terminal: ${drone.name} selected`);
+    }
+
+    function closePanel() {
+      const panel = document.getElementById('info-panel');
+      gsap.to(panel, {
+        opacity: 0,
+        scale: 0.8,
+        duration: 0.3,
+        ease: 'power2.in',
+        onComplete: () => panel.style.display = 'none'
+      });
+    }
+
+    // Voice Feedback
+    function speak(text) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.pitch = 1.2;
+      utterance.rate = 1;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Auto-connect Zigbee on load
+    window.addEventListener('load', connectZigbee);
+  </script>
+</body>
+</html>
