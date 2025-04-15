@@ -31,6 +31,9 @@
       padding: 20px;
       overflow-y: auto;
       pointer-events: auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
     }
     #center-column {
       width: 60%;
@@ -113,6 +116,23 @@
       pointer-events: auto;
       background: rgba(0, 0, 50, 0.7);
       display: none;
+      flex-direction: column;
+    }
+    #map-content {
+      flex: 1;
+    }
+    #close-map {
+      background: #ff4444;
+      border: none;
+      padding: 10px;
+      width: 100%;
+      border-radius: 0 0 10px 10px;
+      color: #fff;
+      cursor: pointer;
+      pointer-events: auto;
+    }
+    #close-map:hover {
+      background: #cc0000;
     }
     #info-panel {
       position: absolute;
@@ -160,8 +180,10 @@
       left: 50%;
       transform: translateX(-50%);
       display: flex;
+      flex-wrap: wrap;
       gap: 10px;
       pointer-events: auto;
+      justify-content: center;
     }
     .control-btn {
       background: rgba(0, 255, 255, 0.2);
@@ -196,7 +218,7 @@
         <p><strong>GPS:</strong> <span id="drone-gps"></span></p>
         <p><strong>Speed:</strong> <span id="drone-speed"></span></p>
         <p><strong>Camera Feed:</strong></p>
-        <img id="camera-feed-panel" src="https://via.placeholder.com/320x150?text=Holographic+Feed" alt="Camera Feed">
+        <img id="camera-feed-panel" src="https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=320&q=80" alt="Camera Feed">
         <p><strong>Health:</strong> <span id="drone-health"></span></p>
         <p><strong>Flight Mode:</strong> <span id="drone-mode"></span></p>
         <p><strong>Last Command:</strong> <span id="drone-command"></span></p>
@@ -206,12 +228,22 @@
       </div>
       <div id="control-hub">
         <button class="control-btn" onclick="startSwarm()">Deploy Swarm</button>
+        <button class="control-btn" onclick="takeOff()">Take Off</button>
+        <button class="control-btn" onclick="land()">Land</button>
         <button class="control-btn" onclick="changeFormation('helix')">Helix Formation</button>
         <button class="control-btn" onclick="changeFormation('wave')">Wave Formation</button>
+        <button class="control-btn" onclick="changeFormation('grid')">Grid Formation</button>
+        <button class="control-btn" onclick="changeFormation('circle')">Circle Formation</button>
+        <button class="control-btn" onclick="changeFormation('spiral')">Spiral Formation</button>
+        <button class="control-btn" onclick="changeFormation('line')">Line Formation</button>
+        <button class="control-btn" onclick="changeFormation('cube')">Cube Formation</button>
       </div>
     </div>
     <div id="right-column"></div>
-    <div id="location-map"></div>
+    <div id="location-map">
+      <div id="map-content"></div>
+      <button id="close-map" onclick="closeMap()">Close Map</button>
+    </div>
   </div>
 
   <script>
@@ -229,7 +261,7 @@
       distance: (Math.random() * 500).toFixed(1) + ' m',
       x: Math.random() * 100 - 50,
       y: Math.random() * 100 - 50,
-      z: Math.random() * 50
+      z: 0 // Start on ground
     }));
 
     // Three.js Setup
@@ -268,7 +300,7 @@
 
     camera.position.z = 100;
 
-    // Left Column: Drone Cards
+    // Left Column: Two Vertical Lines of Drone Cards
     const leftColumn = document.getElementById('left-column');
     drones.forEach((drone, i) => {
       const card = document.createElement('div');
@@ -294,7 +326,7 @@
       feedContainer.className = 'camera-feed-container';
       feedContainer.innerHTML = `
         <h5>Drone ${drone.id} Feed</h5>
-        <img class="camera-feed" src="https://via.placeholder.com/200x100?text=Drone+${drone.id}+Feed" alt="Drone ${drone.id} Feed">
+        <img class="camera-feed" src="https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80" alt="Drone ${drone.id} Feed">
         <button class="location-btn" onclick="showLocation(${drone.id})">View Location</button>
       `;
       const img = feedContainer.querySelector('.camera-feed');
@@ -311,7 +343,7 @@
       } else {
         zoomedFeed = document.createElement('img');
         zoomedFeed.className = 'zoomed-feed';
-        zoomedFeed.src = `https://via.placeholder.com/800x600?text=Drone+${droneId}+Zoomed+Feed`;
+        zoomedFeed.src = `https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80`;
         zoomedFeed.alt = `Drone ${droneId} Zoomed Feed`;
         zoomedFeed.onclick = () => toggleZoomFeed(zoomedFeed, droneId);
         document.body.appendChild(zoomedFeed);
@@ -327,25 +359,54 @@
     // Location Map Functionality
     let locationMap = null;
     let currentMarker = null;
+    let updateInterval = null;
     function showLocation(droneId) {
       const drone = drones.find(d => d.id === droneId);
       if (!drone) return;
 
       const mapContainer = document.getElementById('location-map');
-      mapContainer.style.display = 'block';
+      const mapContent = document.getElementById('map-content');
 
-      if (!locationMap) {
-        locationMap = L.map('location-map').setView([51.505, -0.09], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(locationMap);
+      // Fully reset map state
+      resetMap();
+
+      // Create new map container
+      const mapDiv = document.createElement('div');
+      mapDiv.id = `map-${droneId}-${Date.now()}`;
+      mapDiv.style.width = '100%';
+      mapDiv.style.height = '100%';
+      mapContent.appendChild(mapDiv);
+
+      mapContainer.style.display = 'flex';
+
+      // Initialize new map
+      try {
+        locationMap = L.map(mapDiv.id, {
+          zoomControl: true,
+          attributionControl: true
+        }).setView([51.505, -0.09], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(locationMap);
+
+        // Set marker and view
+        const [lat, lon] = drone.gps.split(',');
+        locationMap.setView([parseFloat(lat), parseFloat(lon)], 15);
+        currentMarker = L.marker([parseFloat(lat), parseFloat(lon)])
+          .addTo(locationMap)
+          .bindPopup(`Drone ${drone.id} Location`)
+          .openPopup();
+
+        // Force map to render
+        setTimeout(() => {
+          if (locationMap) {
+            locationMap.invalidateSize();
+          }
+        }, 100);
+      } catch (error) {
+        console.error('Map initialization failed:', error);
       }
-
-      if (currentMarker) {
-        locationMap.removeLayer(currentMarker);
-      }
-
-      const [lat, lon] = drone.gps.split(',');
-      locationMap.setView([lat, lon], 15);
-      currentMarker = L.marker([lat, lon]).addTo(locationMap).bindPopup(`Drone ${drone.id} Location`).openPopup();
 
       gsap.from(mapContainer, {
         scale: 0.5,
@@ -354,28 +415,54 @@
         ease: 'power2.out'
       });
 
-      mapContainer.onclick = () => {
-        gsap.to(mapContainer, {
-          scale: 0.5,
-          opacity: 0,
-          duration: 0.3,
-          ease: 'power2.in',
-          onComplete: () => {
-            mapContainer.style.display = 'none';
-          }
-        });
-      };
-
-      // Simulate live location updates (for demo)
-      setInterval(() => {
+      // Simulate live location updates
+      updateInterval = setInterval(() => {
+        const [lat, lon] = drone.gps.split(',');
         const newLat = (parseFloat(lat) + (Math.random() - 0.5) * 0.001).toFixed(4);
         const newLon = (parseFloat(lon) + (Math.random() - 0.5) * 0.001).toFixed(4);
         drone.gps = `${newLat},${newLon}`;
-        if (currentMarker && mapContainer.style.display === 'block') {
-          currentMarker.setLatLng([newLat, newLon]);
-          locationMap.panTo([newLat, newLon]);
+        if (currentMarker && mapContainer.style.display === 'flex' && locationMap) {
+          currentMarker.setLatLng([parseFloat(newLat), parseFloat(newLon)]);
+          locationMap.panTo([parseFloat(newLat), parseFloat(newLon)]);
         }
       }, 5000);
+    }
+
+    function closeMap() {
+      const mapContainer = document.getElementById('location-map');
+      gsap.to(mapContainer, {
+        scale: 0.5,
+        opacity: 0,
+        duration: 0.3,
+        ease: 'power2.in',
+        onComplete: () => {
+          mapContainer.style.display = 'none';
+          resetMap();
+        }
+      });
+    }
+
+    function resetMap() {
+      if (updateInterval) {
+        clearInterval(updateInterval);
+        updateInterval = null;
+      }
+      if (currentMarker) {
+        currentMarker = null;
+      }
+      if (locationMap) {
+        try {
+          locationMap.off(); // Remove all event listeners
+          locationMap.remove();
+        } catch (error) {
+          console.error('Error removing map:', error);
+        }
+        locationMap = null;
+      }
+      const mapContent = document.getElementById('map-content');
+      if (mapContent) {
+        mapContent.innerHTML = ''; // Clear DOM
+      }
     }
 
     // Animation Loop
@@ -397,6 +484,50 @@
         z: 10,
         ease: 'power2.out'
       });
+    }
+
+    function takeOff() {
+      speak('Swarm taking off');
+      drones.forEach((drone, i) => {
+        drone.status = 'Active';
+        drone.command = 'Take Off';
+        drone.z = 10;
+        gsap.to(droneMeshes[i].position, {
+          z: 10,
+          duration: 2,
+          ease: 'power2.out',
+          onComplete: () => {
+            updateDroneCard(drone);
+          }
+        });
+      });
+    }
+
+    function land() {
+      speak('Swarm landing');
+      drones.forEach((drone, i) => {
+        drone.status = 'Idle';
+        drone.command = 'Land';
+        drone.z = 0;
+        gsap.to(droneMeshes[i].position, {
+          z: 0,
+          duration: 2,
+          ease: 'power2.in',
+          onComplete: () => {
+            updateDroneCard(drone);
+          }
+        });
+      });
+    }
+
+    function updateDroneCard(drone) {
+      const card = leftColumn.querySelector(`.drone-card:nth-child(${drone.id})`);
+      if (card) {
+        card.innerHTML = `
+          <h5>Drone ${drone.id}</h5>
+          <p>${drone.status}</p>
+        `;
+      }
     }
 
     function changeFormation(type) {
@@ -424,6 +555,70 @@
           });
         });
         speak('Wave formation activated');
+      } else if (type === 'grid') {
+        droneMeshes.forEach((mesh, i) => {
+          const row = Math.floor(i / 5);
+          const col = i % 5;
+          gsap.to(mesh.position, {
+            x: (col - 2) * 10,
+            y: (row - 2) * 10,
+            z: 10,
+            duration: 2,
+            ease: 'power2.out'
+          });
+        });
+        speak('Grid formation activated');
+      } else if (type === 'circle') {
+        droneMeshes.forEach((mesh, i) => {
+          const angle = (i / 25) * 2 * Math.PI;
+          const radius = 25;
+          gsap.to(mesh.position, {
+            x: radius * Math.cos(angle),
+            y: radius * Math.sin(angle),
+            z: 10,
+            duration: 2,
+            ease: 'power2.out'
+          });
+        });
+        speak('Circle formation activated');
+      } else if (type === 'spiral') {
+        droneMeshes.forEach((mesh, i) => {
+          const angle = (i / 25) * 6 * Math.PI;
+          const radius = 15 + i * 0.5;
+          gsap.to(mesh.position, {
+            x: radius * Math.cos(angle),
+            y: radius * Math.sin(angle),
+            z: i * 1.5,
+            duration: 2,
+            ease: 'power2.out'
+          });
+        });
+        speak('Spiral formation activated');
+      } else if (type === 'line') {
+        droneMeshes.forEach((mesh, i) => {
+          gsap.to(mesh.position, {
+            x: (i - 12) * 4,
+            y: 0,
+            z: 10,
+            duration: 2,
+            ease: 'power2.out'
+          });
+        });
+        speak('Line formation activated');
+      } else if (type === 'cube') {
+        droneMeshes.forEach((mesh, i) => {
+          const x = (i % 3) - 1;
+          const y = Math.floor((i % 9) / 3) - 1;
+          const z = Math.floor(i / 9) - 1;
+          gsap.to(mesh.position, {
+            x: x * 15,
+            y: y * 15,
+            z: z * 15 + 10,
+            duration: 2,
+            ease: 'power2.out'
+          });
+        });
+        speak('Cube formation activated');
       }
     }
 
@@ -444,7 +639,7 @@
       document.getElementById('drone-command').textContent = drone.command;
       document.getElementById('drone-signal').textContent = drone.signal;
       document.getElementById('drone-distance').textContent = drone.distance;
-      document.getElementById('camera-feed-panel').src = `https://via.placeholder.com/320x150?text=Drone+${drone.id}+Feed`;
+      document.getElementById('camera-feed-panel').src = `https://images.unsplash.com/photo-1568605114967-8130f3a36994?ixlib=rb-4.0.3&auto=format&fit=crop&w=320&q=80`;
       gsap.fromTo(panel, 
         { opacity: 0, scale: 0.8 }, 
         { opacity: 1, scale: 1, duration: 0.5, ease: 'back.out' }
